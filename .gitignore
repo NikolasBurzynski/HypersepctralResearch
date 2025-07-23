@@ -1,0 +1,8 @@
+*.pth
+*.tif
+*.npy
+*.jpg
+*.png
+
+__pycache__/
+

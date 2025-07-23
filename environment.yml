@@ -1,0 +1,13 @@
+name: bruh
+channels:
+  - conda-forge
+  - pytorch
+dependencies:
+  - python=3.9
+  - pip
+  - numpy=1.24.3
+  - scikit-image
+  - Pillow
+  - matplotlib
+  - opencv
+  - tqdm
