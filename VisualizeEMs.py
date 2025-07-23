@@ -18,19 +18,13 @@ def main():
     coeffs = np.load(root_file + ".npy")
     print(coeffs.shape)
     funs = np.load(root_file + "_FUNS.npy")
-    # print(funs.shape)
     image = np.delete(coeffs, 3, 1).reshape(IM_SIZE,IM_SIZE,3)
     splits = np.array(np.hsplit(coeffs, 4))
-    #BSA, DNA, OA
-    # splits[0] = splits[0] * 1902.5469
-    # splits[1] = splits[1] * 419.669435
-    # splits[2] = splits[2] * 9525.879
     print(splits)
     BSA = splits[2].reshape((IM_SIZE,IM_SIZE))
     DNA = splits[0].reshape((IM_SIZE,IM_SIZE))
     OA = splits[1].reshape((IM_SIZE,IM_SIZE))
     WATER = splits[3].reshape((IM_SIZE,IM_SIZE))
-    # print(funs)
     tf.imwrite(root_file + "color.tif", image, photometric = 'rgb')
     tf.imwrite(root_file + "error.tif", funs, photometric = "minisblack")
 

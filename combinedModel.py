@@ -1,13 +1,7 @@
-from cmath import inf
-from tifffile.tifffile import imshow
-from torch.nn.functional import batch_norm
 from NN import CombinedNet
 from Data import Data
-from VisualizeRegion import VisualizeRegion
 from ManualCombination import ManualCombination
-from tqdm import tqdm
 import tifffile as tf
-import sys
 from pathlib import Path
 
 
@@ -18,8 +12,6 @@ from torch.utils.data import DataLoader
 from sklearn.model_selection import train_test_split
 
 import matplotlib.pyplot as plt
-import cv2
-import json
 import datetime
 import time
 
@@ -27,9 +19,7 @@ import time
 TRAINING_PARAMS = {
     "LEARNING_RATE" : .0001,
     "NUM_EPOCHS" : 30,
-    "BATCH_SIZE" : 100, # This should probably stay the same regardless of the size of the input!
-    "WEIGHT_PERCENTAGES": { 
-    }
+    "BATCH_SIZE" : 100,
 }
 WAVE_NUMBERS = 17
 INPUT_LAYER_SIZE = WAVE_NUMBERS
@@ -39,7 +29,6 @@ BACK_BONE_OUTPUT_SIZE = 128
 BACK_BONE_LAYER_SIZES = [INPUT_LAYER_SIZE, 32, 64, BACK_BONE_OUTPUT_SIZE]
 DNA_FINDER_LAYER_SIZES = [BACK_BONE_OUTPUT_SIZE, 64, 32, 16, 8, DNA_FINDER_OUTPUT_SIZE]
 UNMIXER_LAYER_SIZES = [BACK_BONE_OUTPUT_SIZE, 64, 32, 16, 8, UNMIXER_OUTPUT_SIZE]
-USE_WEIGHTED_LOSS = True
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 designMatrix = torch.from_numpy(np.load("Data_Files/17-withoutDNA-DesignMatrix_All_1_Norm_background_plus_water.npy")).to(device=device, dtype = torch.float)
@@ -62,47 +51,6 @@ def calc_dna_loss(loss_fn, outputs, labels):
     outputs = outputs.squeeze()
     return loss_fn(outputs, labels)
 
-
-def calc_unmixing_loss(inputs, outputs, weights, dna_finder_output=None): # Square error
-    weights = torch.tensor(weights).to(device)
-    if dna_finder_output:
-        edited_outputs = outputs.clone()
-        edited_outputs[:, 0] = outputs[:, 0] * dna_finder_output.squeeze()
-        resSpec = torch.mm(edited_outputs, designMatrix)
-    else:
-        resSpec = torch.mm(outputs, designMatrix)
-    res = torch.sum(((inputs-resSpec) * weights) ** 2, axis = 1)
-    return torch.sum(res)
-
-
-def calc_loss_weights(inWeights):
-    base_weight = (1-round(np.sum([*inWeights.values()]),3)) / (WAVE_NUMBERS - len(inWeights.keys()))
-    TRAINING_PARAMS["WEIGHTS"] = [inWeights[x] if x in inWeights.keys() else base_weight for x in range(WAVE_NUMBERS)]
-
-def do_dna_construction(reconstruction):
-    dna_layer = reconstruction[:, :, 0]
-    bsa_layer = reconstruction[:, :, 2]
-    dna_mask = np.where(dna_layer > DNA_PROB_THRESH, 1, 0)
-    new_dna_layer = [
-        [0 if dna_mask[i][j] == 0 else bsa_layer[i][j] 
-         for j in range(len(bsa_layer[i]))]
-         for i in range(len(bsa_layer))
-    ]
-    reconstruction[:, :, 0] = new_dna_layer
-    return reconstruction
-    
-def do_dna_fix(dna_prob_oa_bsa, dna_prod):
-    dna_mask = np.where(dna_prod > DNA_PROB_THRESH, 1, 0)
-    bsa_unmixing = dna_prob_oa_bsa[:, :, 1]
-
-    new_dna_layer = [
-        [0 if dna_mask[i][j] == 0 else bsa_unmixing[i][j] 
-         for j in range(len(bsa_unmixing[i]))]
-         for i in range(len(bsa_unmixing))
-    ]
-    
-    dna_prob_oa_bsa[:, :, 0] = new_dna_layer # Fill the empty slice with the newly created "DNA" layer
-    return dna_prob_oa_bsa
 
 def makeRGB(net, test_data, test_data_name, test_data_shape, device, MODEL_PATH, MODEL_IDENTIFIER):
 
@@ -128,15 +76,10 @@ def makeRGB(net, test_data, test_data_name, test_data_shape, device, MODEL_PATH,
     end = time.time()
     BG = image[:, :, -1]   # BACKGROUND
     dnaprob_oa_bsa = image[:, :, :-1] # DNA_prob, OA, BSA
-    dna_prob = image[:, :, 0] # DNA Prob
     tf.imwrite("./Results/new/" + str(DNA_PROB_THRESH*100) + 'P' + MODEL_IDENTIFIER + "_" + test_data_name + "_raw_outputs.tif", dnaprob_oa_bsa, photometric = 'rgb')
-    newImage = do_dna_fix(dnaprob_oa_bsa, dna_prob)
-    tf.imwrite("./Results/new/" + str(DNA_PROB_THRESH*100) + 'P' + MODEL_IDENTIFIER + "_" + test_data_name + "_DNAProb.tif", dna_prob, photometric = 'minisblack')
-    tf.imwrite("./Results/new/" + str(DNA_PROB_THRESH*100) + 'P' + MODEL_IDENTIFIER + "_" + test_data_name + "_output+dnaprob.tif", newImage, photometric = 'rgb')
-    tf.imwrite("./Results/new/" + str(DNA_PROB_THRESH*100) + 'P' + MODEL_IDENTIFIER + "_" + test_data_name + "_BG_output.tif", BG, photometric = 'minisblack')
-    print("Created Files")
+    print("Created File")
     net.train()
-    return newImage, end-start
+    return dnaprob_oa_bsa, end-start
         
 
 def train(net, train_time_set, device, MODEL_PATH, params, checkpoint = None, LOSSES = []):
@@ -167,7 +110,6 @@ def train(net, train_time_set, device, MODEL_PATH, params, checkpoint = None, LO
             optimizer.zero_grad()
             dna_finder_output, unmixer_outputs = net(spectra_inputs)
             dna_finder_loss = calc_dna_loss(bce_loss, dna_finder_output, nuclei_labels) * 0.1 # Weight this loss less because its value is 100 x the value of the unmixing loss
-            # unmixing_loss = calc_unmixing_loss(spectra_inputs, unmixer_outputs, params["WEIGHTS"], dna_finder_output=None)
             unmixing_loss = mse_loss(spectra_inputs, unmixer_outputs)
             total_loss = dna_finder_loss + unmixing_loss
             total_loss.backward()
@@ -190,11 +132,6 @@ def train(net, train_time_set, device, MODEL_PATH, params, checkpoint = None, LO
     return save_path, end - start, LOSSES
             
 if __name__ == "__main__":  
-    ct = datetime.datetime.now()
-
-    if USE_WEIGHTED_LOSS:
-        calc_loss_weights(TRAINING_PARAMS["WEIGHT_PERCENTAGES"])
-
     data = Data("./Data_Files/HELA/")
     TEST_IMG_NAME = Path(data.slice_filenames[data.test_file_index][1]).name.split('.')[0]
     MODEL_IDENTIFIER = f"MSE_17WN_Train_1_2_3_{TRAINING_PARAMS['NUM_EPOCHS']}Epochs_{TRAINING_PARAMS['BATCH_SIZE']}Batch"

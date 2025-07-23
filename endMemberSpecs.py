@@ -73,13 +73,9 @@ def main():
     BSA = pipe.all_imgs[0].astype(np.float32)
     DNA = pipe.all_imgs[1].astype(np.float32)
     OA = pipe.all_imgs[2].astype(np.float32)
-    # RNA_1 = pipe.all_imgs[3].astype(np.float32)
-    # RNA_3 = pipe.all_imgs[4].astype(np.float32)
     WATER = pipe.all_imgs[5].astype(np.float32)
     BSA_THRESH = io.imread('Data_Files/Endmembers/Thresholds/BSA-1-THRSD.jpg')
     DNA_THRESH = io.imread('Data_Files/Endmembers/Thresholds/DNA-1-THRSD.jpg')
-    # RNA_THRESH_1 = io.imread('Data_Files/Endmembers/Thresholds/RNA-1-THRSD.jpg')
-    # RNA_THRESH_3 = io.imread('Data_Files/Endmembers/Thresholds/RNA-3-THRSD.jpg')
 
     BACKGROUND_SPEC = get_background()[0:17]
 
@@ -92,25 +88,16 @@ def main():
     print(WATER_SPEC.shape)
     print(BACKGROUND_SPEC.shape)
     BACK_WATER_AVG_SPEC = (BACKGROUND_SPEC + WATER_SPEC) / 2
-    # RNA_SPEC_1 = generate_spec(RNA_1, True, RNA_THRESH_1)[0:17]
-    # RNA_SPEC_3 = generate_spec(RNA_3, True, RNA_THRESH_3)[0:17]
-    # RNA_SPEC = np.flip(((RNA_SPEC_1 + RNA_SPEC_3) / 2))
 
 
     plt.plot(BSA_SPEC, label = 'BSA', color = "blue")
     plt.plot(OA_SPEC, label = 'OA', color = "green")
-    # plt.plot(RNA_SPEC_1, label = 'RNA_1', color = "pink")
-    # plt.plot(RNA_SPEC_3, label = 'RNA_3', color = "purple")
-
-    # plt.plot(RNA_SPEC, label = 'RNA', color = "red")
     plt.plot(DNA_SPEC, label = 'DNA', color = "red")
     plt.plot(BACK_WATER_AVG_SPEC, label = 'BACKGROUND', color = "black")
 
     plt.legend()
     plt.show()
-    # specs = [DNA_SPEC, OA_SPEC, BSA_SPEC, BACK_WATER_AVG_SPEC]
     specs = [DNA_SPEC, OA_SPEC, BSA_SPEC, BACK_WATER_AVG_SPEC]
-        #   Green    Blue
     print("specs", np.array(specs, dtype=np.float64))
     npSpecs = np.array(specs, dtype=np.float64).T
     print("npSpecs", npSpecs)
